@@ -1,0 +1,10 @@
+# META for aig
+version = "0.0.0"
+description = "and-inverter graphs"
+requires = ""
+archive(byte) = "aig.cma"
+archive(byte, plugin) = "aig.cma"
+archive(native) = "aig.cmxa"
+archive(native, plugin) = "aig.cmxs"
+exists_if = "aig.cma"
+

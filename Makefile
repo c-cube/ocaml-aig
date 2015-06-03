@@ -9,5 +9,11 @@ all:
 clean:
 	$(OCAMLBUILD) -clean
 
-.PHONY: all clean
+install: all
+	ocamlfind install aig META $(addprefix _build/,$(TARGETS))
+
+remove:
+	ocamlfind remove aig
+
+.PHONY: all clean install remove
 

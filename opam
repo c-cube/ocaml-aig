@@ -1,0 +1,22 @@
+opam-version: "1.2"
+name: "aig"
+version: "dev"
+author: "Simon Cruanes"
+maintainer: "simon.cruanes@inria.fr"
+build: [
+    [make "all"]
+]
+install: [
+    [make "install"]
+]
+remove: [
+    ["ocamlfind" "remove" "aig"]
+]
+depends: [
+    "ocamlfind" {build}
+]
+tags: [ "aig" "bool" "circuit" ]
+homepage: "https://github.com/c-cube/aig"
+dev-repo: "https://github.com/c-cube/aig.git"
+bug-reports: "https://github.com/c-cube/aig/issues/"
+
