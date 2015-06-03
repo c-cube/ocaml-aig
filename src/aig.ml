@@ -215,7 +215,15 @@ let heuristic_tbl_size_ t = max 16 (min 128 (Tbl.count t.man.tbl))
 let fold f t =
   fold_rec (Hashtbl.create (heuristic_tbl_size_ t)) f t.node
 
+(* TODO: pretty printing (with and without sharing, using backrefs) *)
+
+(* TODO: AIGER parser (see "http://fmv.jku.at/aiger/") 
+   TODO: printer to AIGER, too? *)
+
 (* TODO: graphviz export *)
+
+(* TODO: compression by depth-two scanning, see
+  "DAG-Aware Circuit Compression For Formal Verification"*)
 
 (** {2 Evaluation} *)
 
