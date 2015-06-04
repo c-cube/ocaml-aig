@@ -238,6 +238,8 @@ let rec fold_nodes_rec f acc set stack = match stack with
 
 let fold_nodes f acc n = fold_nodes_rec f acc NodeSet.empty [n]
 
+let size n =  fold_nodes (fun n _ -> n+1) 0 n
+
 (** {2 Support} *)
 
 let vars_fold f acc n =
@@ -358,4 +360,45 @@ and pp_inner out n =
   if n.id < 0 then Format.fprintf out "(%a)" pp n else pp out n
 
 let pp_shared out t = assert false (* TODO *)
+
+(* print recursively graph to out *)
+let pp_dot' tbl out nodes =
+  let pp_name out n = Format.fprintf out "node_%d" (Pervasives.abs n.id) in
+  let pp_edge out n = if sign n then () else Format.pp_print_string out "¬" in
+  Format.fprintf out "@[<v>digraph aig {";
+  while not (Queue.is_empty nodes) do
+    let n = Queue.pop nodes in
+    if not (Hashtbl.mem tbl n.id) then (
+      Hashtbl.add tbl n.id ();
+      assert (n.id > 0);
+      match n.cell with
+      | NTrue -> Format.fprintf out "%a [label=\"⊤\"];@," pp_name n
+      | NVar v -> Format.fprintf out "%a [label=\"v%d\"];@," pp_name n v
+      | NAnd (a, b) ->
+        Format.fprintf out "%a [label=\"∧\"];@," pp_name n;
+        Format.fprintf out "%a -> %a [label=\"%a\"];@," pp_name n pp_name a pp_edge a;
+        Format.fprintf out "%a -> %a [label=\"%a\"];@," pp_name n pp_name b pp_edge b;
+        Queue.push (abs a) nodes;
+        Queue.push (abs b) nodes;
+    )
+  done;
+  Format.fprintf out "@,@]}@?";
+  ()
+
+let pp_dot out t =
+  let q = Queue.create () in
+  Queue.push (abs t) q;
+  pp_dot' (Hashtbl.create 256) out q
+
+let pp_dot_l out l =
+  let q = Queue.create () in
+  List.iter (fun n -> Queue.push (abs n) q) l;
+  pp_dot' (Hashtbl.create 256) out q
+
+let dot_to_file name t =
+  let oc = open_out name in
+  let out = Format.formatter_of_out_channel oc in
+  pp_dot out t;
+  close_out oc
+
 

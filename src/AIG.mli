@@ -117,6 +117,9 @@ val fold : ('a view -> 'a) -> t -> 'a
 val fold_nodes : ('a -> t view -> 'a) -> 'a -> t -> 'a
 (** Traverse the nodes exactly once, in an unspecified order *)
 
+val size : t -> int
+(** Traverse the graph to compute the number of nodes it contains *)
+
 (** {2 Evaluation} *)
 
 val eval_fun : (var -> bool) -> t -> bool
@@ -132,4 +135,13 @@ val pp : Format.formatter -> t -> unit
 
 val pp_shared : Format.formatter -> t -> unit
 (** Recursive printing, with sharing *)
+
+val pp_dot : Format.formatter -> t -> unit
+(** [pp_dot out t] prints the graph [t] as a "digraph" on the given formatter *)
+
+val pp_dot_l : Format.formatter -> t list -> unit
+(** Print a list of graphs that possibly share sub-parts *)
+
+val dot_to_file : string -> t -> unit
+(** [dot_to_file name t] writes the graph [t] in the file [name] *)
 
