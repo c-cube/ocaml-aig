@@ -28,6 +28,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 type var = int
 
+module VarOrd = struct
+  type t = var
+  let compare (v:var) v' = Pervasives.compare v v'
+end
+module VarMap = Map.Make(VarOrd)
+module VarSet = Set.Make(VarOrd)
+
 (* unsigned node *)
 type unode_cell =
   | NTrue
@@ -40,6 +47,8 @@ and node = {
 }
 
 let id n = n.id
+
+type t = node
 
 (** Weak set of unodes *)
 module Tbl = Weak.Make(struct
@@ -69,38 +78,23 @@ let create ?(size=1024 * 32) () =
   } in
   man
 
-type t = {
-  node: node;
-  man: manager;
-}
+let equal a b = a == b
 
-let fail_man_ () = invalid_arg "incompatible managers"
+let compare a b = Pervasives.compare a.id b.id
 
-let equal a b =
-  a.man == b.man && a.node == b.node
+let sign t = t.id > 0
 
-let compare a b =
-  if a.man != b.man then fail_man_ ();
-  Pervasives.compare a.node.id b.node.id
+let abs t = if t.id > 0 then t else t.opp
 
-let manager t = t.man
-
-let sign t = t.node.id > 0
-
-let abs t = if t.node.id > 0 then t else {t with node=t.node.opp; }
-
-let neg t = {t with node=t.node.opp}
+let neg t = t.opp
 
 let apply_sign t sign =
   if sign then abs t else neg (abs t)
 
 let rec bot_ = {cell=NTrue; id=0; opp=bot_}  (* absurd value, do not export *)
 
-let rec mk_true_ = { cell=NTrue; id= 1; opp=mk_false_ }
-and mk_false_ = { cell=NTrue; id= ~-1; opp=mk_true_ }
-
-let true_ man = {man; node=mk_true_; }
-let false_ man = {man; node=mk_false_; }
+let rec true_ = { cell=NTrue; id= 1; opp=false_ }
+and false_ = { cell=NTrue; id= ~-1; opp=true_ }
 
 let hashcons_ man n =
   let n' = Tbl.merge man.tbl n in
@@ -112,27 +106,26 @@ let hashcons_ man n =
   );
   n'
 
-let var man v =
-  let node = hashcons_ man {cell=NVar v; id=man.unode_id; opp=bot_ } in
-  { man; node; }
+let var ~man v =
+  hashcons_ man {cell=NVar v; id=man.unode_id; opp=bot_ }
 
-let mk_neg t = t.opp
+let neg t = t.opp
 
 (* low level constructor *)
 let mk_and_real_ man n1 n2 =
   hashcons_ man {cell=NAnd (n1, n2); id=man.unode_id; opp=bot_ }
 
 (* build [a and b] but enforces some invariants *)
-let mk_and ~man a b = match () with
-  | () when a==mk_true_ -> b (* true and b --> b *)
-  | () when b==mk_true_ -> a (* a and true --> a *)
-  | () when a == mk_false_ || b == mk_false_ -> mk_false_ (* false and _ --> false *)
+let and_ ~man a b = match () with
+  | () when a==true_ -> b (* true and b --> b *)
+  | () when b==true_ -> a (* a and true --> a *)
+  | () when a == false_ || b == false_ -> false_ (* false and _ --> false *)
   | () when a == b ->
     (* a and a --> a *)
     a
   | () when a.id == - b.id ->
     (* a and -a --> false *)
-    mk_false_
+    false_
   | () when a.id > b.id ->
     (* smallest node first *)
     mk_and_real_ man b a
@@ -140,44 +133,16 @@ let mk_and ~man a b = match () with
     mk_and_real_ man a b
 
 (* [a or b] is [not (not a and not b)] *)
-let mk_or ~man a b = mk_neg (mk_and ~man (mk_neg a) (mk_neg b))
+let or_ ~man a b = neg (and_ ~man (neg a) (neg b))
 
 (* [a => b] is [not (a and (not b))] *)
-let mk_imply ~man a b = mk_neg (mk_and ~man a (mk_neg b))
+let imply ~man a b = neg (and_ ~man a (neg b))
 
 (* [a equiv b] is [(a => b) and (b => a)] *)
-let mk_equiv ~man a b = mk_and ~man (mk_imply ~man a b) (mk_imply ~man b a)
+let equiv ~man a b = and_ ~man (imply ~man a b) (imply ~man b a)
 
 (* [a xor b] is [(a and not b) or (not a and b)] *)
-let mk_xor ~man a b = mk_or ~man (mk_and ~man a (mk_neg b)) (mk_and ~man (mk_neg a) b)
-
-let and_ a b =
-  if a.man != b.man then fail_man_ ();
-  { man=a.man; node=mk_and ~man:a.man a.node b.node; }
-
-let or_ a b =
-  if a.man != b.man then fail_man_ ();
-  { man=a.man; node=mk_or ~man:a.man a.node b.node; }
-
-let imply a b =
-  if a.man != b.man then fail_man_ ();
-  { man=a.man; node=mk_imply ~man:a.man a.node b.node; }
-
-let equiv a b =
-  if a.man != b.man then fail_man_ ();
-  { man=a.man; node=mk_equiv ~man:a.man a.node b.node; }
-
-let xor a b =
-  if a.man != b.man then fail_man_ ();
-  { man=a.man; node=mk_xor ~man:a.man a.node b.node; }
-
-module Infix = struct
-  let (~-) = neg
-  let (&&) = and_
-  let (||) = or_
-  let (==>) = imply
-  let (<=>) = equiv
-  end
+let xor ~man a b = or_ ~man (and_ ~man a (neg b)) (and_ ~man (neg a) b)
 
 (** {2 Iteration} *)
 
@@ -241,9 +206,7 @@ let rec fold_rec f map stack acc = match stack, acc with
   | St_neg _, _
   | St_and _, _ -> assert false
 
-let fold' f n = fold_rec f NodeMap.empty (St_explore (n, St_bot)) []
-
-let fold f t = fold' f t.node
+let fold f n = fold_rec f NodeMap.empty (St_explore (n, St_bot)) []
 
 (* TODO: AIGER parser (see "http://fmv.jku.at/aiger/")
    TODO: printer to AIGER, too? *)
@@ -273,21 +236,12 @@ let rec fold_nodes_rec f acc set stack = match stack with
             | NVar v ->
               fold_nodes_rec f (f acc (Var v)) set' stack'
 
-let fold_nodes' f acc n = fold_nodes_rec f acc NodeSet.empty [n]
-
-let fold_nodes f acc t = fold_nodes' f acc t.node
+let fold_nodes f acc n = fold_nodes_rec f acc NodeSet.empty [n]
 
 (** {2 Support} *)
 
-module VarOrd = struct
-  type t = var
-  let compare (v:var) v' = Pervasives.compare v v'
-end
-module VarMap = Map.Make(VarOrd)
-module VarSet = Set.Make(VarOrd)
-
-let vars_fold' f acc n =
-  fold_nodes'
+let vars_fold f acc n =
+  fold_nodes
     (fun acc n -> match n with
        | True
        | And _
@@ -295,11 +249,9 @@ let vars_fold' f acc n =
        | Var v -> f acc v
     ) acc n
 
-let vars_fold f acc t = vars_fold' f acc t.node
-
 let vars t = vars_fold (fun set v -> VarSet.add v set) VarSet.empty t
 
-let vars_iter t yield = vars_fold' (fun () v -> yield v) () t.node
+let vars_iter t yield = vars_fold (fun () v -> yield v) () t
 
 (** {2 Evaluation} *)
 
@@ -321,8 +273,7 @@ let rec eval_rec tbl f n =
     Hashtbl.replace tbl n.id res;
     res
 
-let eval_fun valuation t =
-  eval_rec (Hashtbl.create 256) valuation t.node
+let eval_fun valuation t = eval_rec (Hashtbl.create 256) valuation t
 
 (* XXX: naive version:
 let eval_fun valuation t =
@@ -340,7 +291,7 @@ let eval map t =
 
 (** {2 IO} *)
 
-let rec pp' out n =
+let rec pp out n =
   if n.id < 0
   then Format.fprintf out "@[<hv1>¬ %a@]" pp_inner n.opp
   else match n.cell with
@@ -349,9 +300,7 @@ let rec pp' out n =
     | NAnd (a, b) ->
       Format.fprintf out "@[<hv2>(and@ %a@ %a)@]" pp_inner a pp_inner b
 and pp_inner out n =
-  if n.id < 0 then Format.fprintf out "(%a)" pp' n else pp' out n
-
-let pp out t = pp' out t.node
+  if n.id < 0 then Format.fprintf out "(%a)" pp n else pp out n
 
 let pp_shared out t = assert false (* TODO *)
 

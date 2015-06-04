@@ -29,18 +29,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 type var = int
 (** A boolean variable *)
 
+module VarSet : Set.S with type elt = var
+module VarMap : Map.S with type key = var
+
 type manager
 (** Manager, stores graph nodes and ensures maximal sharing *)
 
 val create : ?size:int -> unit -> manager
 (** New manager *)
 
-type node
-
-type t = private {
-  node: node;
-  man: manager;
-}
+type t
 (** A node of an AIG *)
 
 (** {2 Basics} *)
@@ -51,8 +49,6 @@ val equal : t -> t -> bool
 val compare : t -> t -> int
 (** Total order between nodes of the same manager *)
 
-val manager : t -> manager
-
 val sign : t -> bool
 (** Sign of the node (positive or negative) *)
 
@@ -62,38 +58,42 @@ val abs : t -> t
 val apply_sign : t -> bool -> t
 (** [apply_sign t s] sets the sign of [t] to [s] *)
 
+(** {2 Support} *)
+
+val vars : t -> VarSet.t
+(** Set of variables of [t] *)
+
+val vars_fold : ('a -> var -> 'a) -> 'a -> t -> 'a
+(** Fold once on each variable *)
+
+val vars_iter : t -> (var -> unit) -> unit
+(** [vars_iter t f] calls [f] on every variable of [t], possibly several
+    times per variable *)
+
 (** {2 Boolean Operators} *)
 
-val true_ : manager -> t
+val true_ : t
 
-val false_ : manager -> t
+val false_ : t
 
-val var : manager -> var -> t
+val var : man:manager -> var -> t
 (** Variable node *)
 
 val neg : t -> t
 (** Negate node *)
 
-val and_ : t -> t -> t
+val and_ : man:manager -> t -> t -> t
 (** Conjunction of nodes *)
 
-val or_ : t -> t -> t
+val or_ : man:manager -> t -> t -> t
 (** Disjunction of nodes *)
 
-val imply : t -> t -> t
+val imply : man:manager -> t -> t -> t
 (** implication *)
 
-val equiv : t -> t -> t
+val equiv : man:manager -> t -> t -> t
 
-val xor : t -> t -> t
-
-module Infix : sig
-  val (~-) : t -> t
-  val (&&) : t -> t -> t
-  val (||) : t -> t -> t
-  val (==>) : t -> t -> t (** Imply *)
-  val (<=>) : t -> t -> t (** Equiv *)
-end
+val xor : man:manager -> t -> t -> t
 
 (** {2 Iteration} *)
 
@@ -106,26 +106,10 @@ type 'a view =
 val fold : ('a view -> 'a) -> t -> 'a
 (** Fold on the formula, down to the leaves *)
 
-val fold_nodes : ('a -> node view -> 'a) -> 'a -> t -> 'a
+val fold_nodes : ('a -> t view -> 'a) -> 'a -> t -> 'a
 (** Traverse the nodes exactly once, in an unspecified order *)
 
-(** {2 Support} *)
-
-module VarSet : Set.S with type elt = var
-
-val vars : t -> VarSet.t
-(** Set of variables of [t] *)
-
-val vars_fold : ('a -> var -> 'a) -> 'a -> t -> 'a
-(** Fold once on each variable *)
-
-val vars_iter : t -> (var -> unit) -> unit
-(** [vars_iter t f] calls [f] on every variable of [t], possibly several
-    times per variable *)
-
 (** {2 Evaluation} *)
-
-module VarMap : Map.S with type key = var
 
 val eval_fun : (var -> bool) -> t -> bool
 (** Evaluate a graph under a boolean valuation as a function *)

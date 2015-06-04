@@ -59,11 +59,11 @@ module Bool = struct
 
   (* convert into an AIG *)
   let rec to_aig man t = match t.view with
-    | True -> AIG.true_ man
-    | Or (a, b) -> AIG.or_ (to_aig man a) (to_aig man b)
-    | And (a, b) -> AIG.and_ (to_aig man a) (to_aig man b)
+    | True -> AIG.true_
+    | Or (a, b) -> AIG.or_ ~man (to_aig man a) (to_aig man b)
+    | And (a, b) -> AIG.and_ ~man (to_aig man a) (to_aig man b)
     | Not a -> AIG.neg (to_aig man a)
-    | Var v -> AIG.var man v
+    | Var v -> AIG.var ~man v
 
   let rec list_range i j = if i=j then [] else i:: (list_range (i+1) j)
 
