@@ -35,7 +35,12 @@ type manager
 val create : ?size:int -> unit -> manager
 (** New manager *)
 
-type t
+type node
+
+type t = private {
+  node: node;
+  man: manager;
+}
 (** A node of an AIG *)
 
 (** {2 Basics} *)
@@ -101,9 +106,38 @@ type 'a view =
 val fold : ('a view -> 'a) -> t -> 'a
 (** Fold on the formula, down to the leaves *)
 
+val fold_nodes : ('a -> node view -> 'a) -> 'a -> t -> 'a
+(** Traverse the nodes exactly once, in an unspecified order *)
+
+(** {2 Support} *)
+
+module VarSet : Set.S with type elt = var
+
+val vars : t -> VarSet.t
+(** Set of variables of [t] *)
+
+val vars_fold : ('a -> var -> 'a) -> 'a -> t -> 'a
+(** Fold once on each variable *)
+
+val vars_iter : t -> (var -> unit) -> unit
+(** [vars_iter t f] calls [f] on every variable of [t], possibly several
+    times per variable *)
 
 (** {2 Evaluation} *)
 
-val eval : (var -> bool) -> t -> bool
-(** Evaluate a graph under a boolean valuation *)
+module VarMap : Map.S with type key = var
+
+val eval_fun : (var -> bool) -> t -> bool
+(** Evaluate a graph under a boolean valuation as a function *)
+
+val eval : bool VarMap.t -> t -> bool
+(** Evaluate a graph under a boolean valuation as a map *)
+
+(** {2 IO} *)
+
+val pp : Format.formatter -> t -> unit
+(** Recursive printing, without sharing *)
+
+val pp_shared : Format.formatter -> t -> unit
+(** Recursive printing, with sharing *)
 
