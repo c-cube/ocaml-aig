@@ -67,12 +67,12 @@ module Bool = struct
 
   let rec list_range i j = if i=j then [] else i:: (list_range (i+1) j)
 
-  let rand : t A.t =
+  let rand size : t A.t =
     let open A in
     (1 -- 30) >>= fun n_var ->
     (* random vars + true *)
     let base = among ([true_; false_] @ List.map var (list_range 1 n_var)) in
-    fix ~base
+    fix ~max:size ~base
       (fun self ->
          choose
            [ pure neg <*> self
@@ -110,11 +110,11 @@ let rand_valuation vars : bool Aig.VarMap.t A.t =
 
 let rand_valuations vars = A.list ~len:A.(1 -- 8) (rand_valuation vars)
 
-let test_eval =
+let test_eval size =
   let man = Aig.create () in
   (* generates (form, aig(form), random valuations) *)
   let gen = A.(
-    Bool.rand >>= fun form ->
+    Bool.rand size >>= fun form ->
     let vars = Bool.vars form in
     let aig = Bool.to_aig man form in
     rand_valuations vars >>= fun valuations ->
@@ -128,11 +128,9 @@ let test_eval =
     CCFormat.sprintf "@[<v>form:%a@,aig:%a@,valuations:@[<hv1>%a@]@]"
       Bool.pp form Aig.pp aig (CCFormat.list pp_valuation) valuations
   in
-  QCheck.mk_test ~pp ~name:"eval_correct" gen prop
+  QCheck.mk_test ~pp ~name:("eval_correct_"^string_of_int size) gen prop
 
-let suite = [ test_eval ]
+let suite = [ test_eval 30; test_eval 50 ]
 
-let () =
-  let ok = QCheck.run_tests suite in
-  if ok then () else exit 1
+let () = QCheck.run_main suite
 
