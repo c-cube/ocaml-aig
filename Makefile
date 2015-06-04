@@ -2,7 +2,7 @@
 OCAMLBUILD=ocamlbuild -use-ocamlfind
 
 TARGETS=src/aig.cmxa src/aig.cma src/aig.cmxs src/AIG.cmi
-TEST_TARGETS=test/test_aig.native
+TEST_TARGETS=test/test_aig.native test/make_rand.native
 
 all:
 	$(OCAMLBUILD) $(TARGETS)
