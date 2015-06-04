@@ -1,7 +1,7 @@
 
 OCAMLBUILD=ocamlbuild -use-ocamlfind
 
-TARGETS=src/aig.cmxa src/aig.cma src/aig.cmxs src/aig.cmi
+TARGETS=src/aig.cmxa src/aig.cma src/aig.cmxs src/AIG.cmi
 TEST_TARGETS=test/test_aig.native
 
 all:
@@ -14,6 +14,7 @@ install: all
 	ocamlfind install aig META $(addprefix _build/,$(TARGETS))
 
 build-test: all
+	$(OCAMLBUILD) -I src/ $(TEST_TARGETS)
 
 test: build-test
 	./test_aig.native

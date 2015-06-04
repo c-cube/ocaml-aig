@@ -28,7 +28,7 @@ module Bool = struct
     | And (a,b) -> eval_fun f a && eval_fun f b
     | Or (a,b) -> eval_fun f a || eval_fun f b
 
-  let eval map t = eval_fun (fun v -> Aig.VarMap.find v map) t
+  let eval map t = eval_fun (fun v -> AIG.VarMap.find v map) t
 
   let rec pp out t = match t.view with
     | True -> Format.fprintf out "1"
@@ -48,22 +48,22 @@ module Bool = struct
   let vars t =
     let rec vars_rec acc t = match t.view with
       | True -> acc
-      | Var v -> Aig.VarSet.add v acc
+      | Var v -> AIG.VarSet.add v acc
       | Not a -> vars_rec acc a
       | And (a,b)
       | Or (a,b) ->
         let acc = vars_rec acc a in
         vars_rec acc b
     in
-    vars_rec Aig.VarSet.empty t
+    vars_rec AIG.VarSet.empty t
 
   (* convert into an AIG *)
   let rec to_aig man t = match t.view with
-    | True -> Aig.true_ man
-    | Or (a, b) -> Aig.or_ (to_aig man a) (to_aig man b)
-    | And (a, b) -> Aig.and_ (to_aig man a) (to_aig man b)
-    | Not a -> Aig.neg (to_aig man a)
-    | Var v -> Aig.var man v
+    | True -> AIG.true_ man
+    | Or (a, b) -> AIG.or_ (to_aig man a) (to_aig man b)
+    | And (a, b) -> AIG.and_ (to_aig man a) (to_aig man b)
+    | Not a -> AIG.neg (to_aig man a)
+    | Var v -> AIG.var man v
 
   let rec list_range i j = if i=j then [] else i:: (list_range (i+1) j)
 
@@ -90,19 +90,19 @@ let () =
     cases
 *)
 
-let pp_valuation out (map:bool Aig.VarMap.t) =
-  let items = Aig.VarMap.fold (fun k v acc -> (k,v)::acc) map [] in
+let pp_valuation out (map:bool AIG.VarMap.t) =
+  let items = AIG.VarMap.fold (fun k v acc -> (k,v)::acc) map [] in
   Format.fprintf out "@[<hv1>%a@]"
     (CCFormat.list (CCFormat.pair CCFormat.int CCFormat.bool)) items
 
 (* [(var * bool) list -> VarMap.t] *)
 let mk_val
-  : (int * bool) list -> bool Aig.VarMap.t
-  = fun l -> List.fold_left (fun acc (v,b) -> Aig.VarMap.add v b acc) Aig.VarMap.empty l
+  : (int * bool) list -> bool AIG.VarMap.t
+  = fun l -> List.fold_left (fun acc (v,b) -> AIG.VarMap.add v b acc) AIG.VarMap.empty l
 
 (* set of variables -> random valuation *)
-let rand_valuation vars : bool Aig.VarMap.t A.t =
-  let l = Aig.VarSet.elements vars in
+let rand_valuation vars : bool AIG.VarMap.t A.t =
+  let l = AIG.VarSet.elements vars in
   A.(
     let gens = List.map (fun v -> bool >>= fun b -> return (v, b)) l in
     fun st -> mk_val (List.map (fun g -> g st) gens)
@@ -111,7 +111,7 @@ let rand_valuation vars : bool Aig.VarMap.t A.t =
 let rand_valuations vars = A.list ~len:A.(1 -- 8) (rand_valuation vars)
 
 let test_eval size =
-  let man = Aig.create () in
+  let man = AIG.create () in
   (* generates (form, aig(form), random valuations) *)
   let gen = A.(
     Bool.rand size >>= fun form ->
@@ -122,11 +122,11 @@ let test_eval size =
   )
   and prop (form, aig, valuations) =
     List.for_all
-      (fun v -> Bool.eval v form = Aig.eval v aig)
+      (fun v -> Bool.eval v form = AIG.eval v aig)
       valuations
   and pp (form, aig, valuations) =
     CCFormat.sprintf "@[<v>form:%a@,aig:%a@,valuations:@[<hv1>%a@]@]"
-      Bool.pp form Aig.pp aig (CCFormat.list pp_valuation) valuations
+      Bool.pp form AIG.pp aig (CCFormat.list pp_valuation) valuations
   in
   QCheck.mk_test ~pp ~name:("eval_correct_"^string_of_int size) gen prop
 
