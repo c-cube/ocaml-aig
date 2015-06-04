@@ -203,7 +203,7 @@ let form_quant = function
 (* test equality of [quant vars form] and [quant vars aig]
    for [vars] subset of vars of [form], where [quant]
    is either [for_all] or [exists] *)
-let test_quant quant size =
+let test_quant ?(n=100) quant size =
   let man = AIG.create () in
   (* generates (form, aig(form), vars, random valuations) *)
   let gen = A.(
@@ -232,7 +232,7 @@ let test_quant quant size =
   let name = CCFormat.sprintf "eval_correct_%s_%d"
       (match quant with Forall -> "forall" | Exists -> "exists") size
   in
-  QCheck.mk_test ~pp ~name gen prop
+  QCheck.mk_test ~n ~pp ~name gen prop
 
 
 let suite =
@@ -243,6 +243,7 @@ let suite =
   ; test_quant Forall 30
   ; test_quant Forall 50
   ; test_quant Exists 50
+  ; test_quant Forall 90 ~n:5
   ]
 
 let () = QCheck.run_main suite
