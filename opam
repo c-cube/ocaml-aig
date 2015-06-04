@@ -14,6 +14,8 @@ remove: [
 ]
 depends: [
     "ocamlfind" {build}
+    "qcheck" {test}
+    "containers" {test}
 ]
 tags: [ "aig" "bool" "circuit" ]
 homepage: "https://github.com/c-cube/aig"
