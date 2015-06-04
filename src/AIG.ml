@@ -253,6 +253,61 @@ let vars t = vars_fold (fun set v -> VarSet.add v set) VarSet.empty t
 
 let vars_iter t yield = vars_fold (fun () v -> yield v) () t
 
+(** {2 Quantification} *)
+
+(*
+  [ forall x (a and b)] becomes [(forall x a) and (forall x b)]
+  [ exists x (a and b)] becomes [(a and b)[x := true] or (a and b)[x := false]]
+*)
+
+let rec exists_rec ~man subst vars n =
+  if n.id < 0
+  then neg (for_all_rec ~man subst vars (neg n))
+  else match n.cell, vars with
+    | NTrue, _ -> true_
+    | NVar v, _ ->
+      begin try
+        VarMap.find v subst
+      with Not_found ->
+        if List.mem v vars
+        then true_ (* [exists x x] -> [true] *)
+        else n
+      end
+    | NAnd (a, b), [] ->
+      (* substitute *)
+      and_ ~man
+        (exists_rec ~man subst [] a)
+        (exists_rec ~man subst [] b)
+    | NAnd (a, b), v :: vars' ->
+      (* [exists v (a and b)] becomes [(a and b)[v := true] or (a and b)[v := false]] *)
+      assert (not (VarMap.mem v subst));
+      exists_rec ~man subst vars'
+        (or_ ~man
+           (exists_rec ~man (VarMap.add v true_ subst) [] n)
+           (exists_rec ~man (VarMap.add v false_ subst) [] n))
+and for_all_rec ~man subst vars n =
+  if n.id < 0
+  then neg (exists_rec ~man subst vars (neg n))
+  else match n.cell with
+    | NTrue -> true_
+    | NVar v ->
+      begin try
+        VarMap.find v subst
+      with Not_found ->
+        if List.mem v vars
+        then false_ (* [forall v v] -> [false] *)
+        else n
+      end
+    | NAnd (a, b) ->
+      (* distribute:  [forall v (a and b)] -> [(forall v a) and (forall v b)] *)
+      and_ ~man
+        (for_all_rec ~man subst vars a)
+        (for_all_rec ~man subst vars b)
+
+let exists ~man vars n = exists_rec ~man VarMap.empty (VarSet.elements vars) n
+
+let for_all ~man vars n = for_all_rec ~man VarMap.empty (VarSet.elements vars) n
+
 (** {2 Evaluation} *)
 
 let rec eval_rec tbl f n =

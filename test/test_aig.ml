@@ -2,6 +2,7 @@
 
 module A = QCheck.Arbitrary
 
+(* specification: trivial boolean formulas *)
 module Bool = struct
   type 'a view =
     | True
@@ -20,6 +21,9 @@ module Bool = struct
   let and_ x y = make_ (And (x,y))
   let or_ x y = make_ (Or (x,y))
   let var v = make_ (Var v)
+
+  let or_list = List.fold_left or_ false_
+  let and_list = List.fold_left and_ true_
 
   let rec eval_fun f t = match t.view with
     | True -> true
@@ -56,6 +60,42 @@ module Bool = struct
         vars_rec acc b
     in
     vars_rec AIG.VarSet.empty t
+
+  (* apply subst to n *)
+  let rec subst map n = match n.view with
+    | True -> n
+    | Var v ->
+      begin try
+        AIG.VarMap.find v map
+      with Not_found ->
+        n
+      end
+    | Not n -> neg (subst map n)
+    | And (a,b) -> and_ (subst map a) (subst map b)
+    | Or (a,b) -> or_ (subst map a) (subst map b)
+
+  (* build all valuations over [vars] *)
+  let all_valuations_ vars =
+    AIG.VarSet.fold
+      (fun v l ->
+        CCList.flat_map
+          (fun sigma ->
+             [ AIG.VarMap.add v true_ sigma
+             ; AIG.VarMap.add v false_ sigma
+             ]
+          ) l
+      ) vars [AIG.VarMap.empty]
+
+  (* quantification over [vars] *)
+  let exists vars n =
+    let sigma_l = all_valuations_ vars in
+    let l = List.map (fun sigma -> subst sigma n) sigma_l in
+    or_list l
+
+  let for_all vars n =
+    let sigma_l = all_valuations_ vars in
+    let l = List.map (fun sigma -> subst sigma n) sigma_l in
+    and_list l
 
   (* convert into an AIG *)
   let rec to_aig man t = match t.view with
@@ -100,6 +140,10 @@ let mk_val
   : (int * bool) list -> bool AIG.VarMap.t
   = fun l -> List.fold_left (fun acc (v,b) -> AIG.VarMap.add v b acc) AIG.VarMap.empty l
 
+let mk_set
+  : int list -> AIG.VarSet.t
+  = fun l -> List.fold_left (fun set x -> AIG.VarSet.add x set) AIG.VarSet.empty l
+
 (* set of variables -> random valuation *)
 let rand_valuation vars : bool AIG.VarMap.t A.t =
   let l = AIG.VarSet.elements vars in
@@ -110,6 +154,7 @@ let rand_valuation vars : bool AIG.VarMap.t A.t =
 
 let rand_valuations vars = A.list ~len:A.(1 -- 8) (rand_valuation vars)
 
+(* test that [eval aig f = eval form f] for several valuations [f] *)
 let test_eval size =
   let man = AIG.create () in
   (* generates (form, aig(form), random valuations) *)
@@ -120,7 +165,8 @@ let test_eval size =
     rand_valuations vars >>= fun valuations ->
     return (form, aig, valuations)
   )
-  and prop (form, aig, valuations) =
+  in
+  let prop (form, aig, valuations) =
     List.for_all
       (fun v -> Bool.eval v form = AIG.eval v aig)
       valuations
@@ -130,7 +176,74 @@ let test_eval size =
   in
   QCheck.mk_test ~pp ~name:("eval_correct_"^string_of_int size) gen prop
 
-let suite = [ test_eval 30; test_eval 50 ]
+(* pick a subset of vars *)
+let pick_vars vars =
+  A.(
+    let n = AIG.VarSet.cardinal vars in
+    if n < 2 then return AIG.VarSet.empty
+    else pure mk_set <*> list ~len:(1 -- min n 6) (among (AIG.VarSet.elements vars))
+  )
+
+let pp_var out v = Format.fprintf out "v%d" v
+let pp_varset out s =
+  CCFormat.list pp_var out (AIG.VarSet.elements s)
+
+type quant =
+  | Exists
+  | Forall
+
+let aig_quant = function
+  | Exists -> AIG.exists
+  | Forall -> AIG.for_all
+
+let form_quant = function
+  | Exists -> Bool.exists
+  | Forall -> Bool.for_all
+
+(* test equality of [quant vars form] and [quant vars aig]
+   for [vars] subset of vars of [form], where [quant]
+   is either [for_all] or [exists] *)
+let test_quant quant size =
+  let man = AIG.create () in
+  (* generates (form, aig(form), vars, random valuations) *)
+  let gen = A.(
+    Bool.rand size >>= fun form ->
+    let vars = Bool.vars form in
+    pick_vars vars >>= fun subvars ->
+    rand_valuations vars >>= fun valuations ->
+    let aig = Bool.to_aig man form in
+    let form' = form_quant quant subvars form in
+    let aig' = aig_quant quant ~man subvars aig in
+    return (form, aig, form', aig', subvars, valuations)
+  )
+  in
+  let prop (form, aig, form', aig', subvars, valuations) =
+    List.for_all
+      (fun v -> Bool.eval v form' = AIG.eval v aig')
+      valuations
+  and pp (form, aig, form', aig', subvars, valuations) =
+    CCFormat.sprintf
+      "@[<v>form:%a@,aig:%a@,vars:%a@,form':%a@,aig':%a@,valuations:@[<hv1>%a@]@]"
+      Bool.pp form AIG.pp aig
+      pp_varset subvars
+      Bool.pp form' AIG.pp aig'
+      (CCFormat.list pp_valuation) valuations
+  in
+  let name = CCFormat.sprintf "eval_correct_%s_%d"
+      (match quant with Forall -> "forall" | Exists -> "exists") size
+  in
+  QCheck.mk_test ~pp ~name gen prop
+
+
+let suite =
+  [ test_eval 30
+  ; test_eval 50
+  ; test_quant Forall 10
+  ; test_quant Exists 10
+  ; test_quant Forall 30
+  ; test_quant Forall 50
+  ; test_quant Exists 50
+  ]
 
 let () = QCheck.run_main suite
 

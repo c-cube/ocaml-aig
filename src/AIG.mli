@@ -95,6 +95,14 @@ val equiv : man:manager -> t -> t -> t
 
 val xor : man:manager -> t -> t -> t
 
+val exists : man:manager -> VarSet.t -> t -> t
+(** [exists ~man vars t] quantifies existentially on each variable of [vars]
+    upon the formula [t] *)
+
+val for_all : man:manager -> VarSet.t -> t -> t
+(** [for_all ~man vars t] quantifies universally on each variable of [vars]
+    upon the formula [t] *)
+
 (** {2 Iteration} *)
 
 type 'a view =
